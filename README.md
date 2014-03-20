@@ -4,7 +4,13 @@ This is a little program that runs on your Raspberry Pi, reads audio from [JACK]
 broadcasts it over [FM][] through the GPIO pin 7 ([GPIO 4][gpio]). If you add
 an antenna (20cm of plain wire will do), the range increases from ~10cm to ~100 meters.
 
-The program is able to broadcast both mono and stereo (plus [RDS][]).
+The program is able to broadcast both mono and stereo. Broadcasting in stereo needs
+resampling and enables RDS emission. Mono (the default) doesn't need resampling or
+stereo modulation and thus sounds clearer.
+
+Make sure not to send samples outside [-1, +1], since the program doesn't validate / crop
+them. You should add a limiter before the program, if there's a chance you might be
+sending those.
 
 
 ## History
