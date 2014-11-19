@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <time.h>
 #include <sys/mman.h>
 
 //TODO
@@ -98,6 +99,7 @@ int jackpifm_setup_fm() {
 
   struct GPCTL setupword = {6/*SRC*/, 1, 0, 0, 0, 1,0x5a};
   ACCESS(CM_GP0CTL) = *((int*)&setupword);
+  return 0;
 }
 
 static void modulate(int m) {
@@ -141,16 +143,27 @@ struct PageInfo instrs[BUFFERINSTRUCTIONS];
 
 static int bufPtr;
 static float clocksPerSample;
-static int sleeptime;
+static struct timespec sleeptime;
 static float fracerror;
 static float timeErr;
 
-void jackpifm_outputter_setup(double sample_rate) {
+void jackpifm_outputter_setup(double sample_rate, size_t period_size) {
   bufPtr = 0;
   fracerror = 0;
   timeErr = 0;
-  sleeptime = (float)1e9 * BUFFERINSTRUCTIONS/(4* sample_rate *2);
+  //sleeptime = (float)1e9 * BUFFERINSTRUCTIONS/(4 * sample_rate *2));
+  sleeptime.tv_sec = 0;
+  sleeptime.tv_nsec = ((float)1e9 * period_size) / sample_rate;
   clocksPerSample = 22500.0 / sample_rate * 1373.5;  // for timing, determined by experiment
+}
+
+void jackpifm_outputter_sync() {
+  void *pos = (void *)(ACCESS(DMABASE + 0x04 /* CurBlock*/) & ~ 0x7F);
+  for (bufPtr = 0; bufPtr < BUFFERINSTRUCTIONS; bufPtr += 4)
+    if (instrs[bufPtr].p == pos) break;
+
+  // We should never get here
+  fprintf(stderr, "Ooops.\n"); //FIXME
 }
 
 void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
@@ -182,7 +195,7 @@ void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
     time++;
 
     while( (ACCESS(DMABASE + 0x04 /* CurBlock*/) & ~ 0x7F) ==  (int)(instrs[bufPtr].p)) {
-      nanosleep(sleeptime);  // are we anywhere in the next 4 instructions?
+      nanosleep(&sleeptime);  // are we anywhere in the next 4 instructions?
     }
 
     // Create DMA command to set clock controller to output FM signal for PWM "LOW" time.
@@ -250,18 +263,18 @@ void jackpifm_setup_dma(float centerFreq) {
 
   // set up a clock for the PWM
   ACCESS(CLKBASE + 40*4 /*PWMCLK_CNTL*/) = 0x5A000026;
-  nanosleep(1e9);
+  usleep(1000);
   ACCESS(CLKBASE + 41*4 /*PWMCLK_DIV*/)  = 0x5A002800;
   ACCESS(CLKBASE + 40*4 /*PWMCLK_CNTL*/) = 0x5A000016;
-  nanosleep(1e9);
+  usleep(1000);
 
   // set up PWM
   ACCESS(PWMBASE + 0x0 /* CTRL*/) = 0;
-  nanosleep(1e9);
+  usleep(1000);
   ACCESS(PWMBASE + 0x4 /* status*/) = -1;  // clear errors
-  nanosleep(1e9);
+  usleep(1000);
   ACCESS(PWMBASE + 0x0 /* CTRL*/) = -1; //(1<<13 /* Use fifo */) | (1<<10 /* repeat */) | (1<<9 /* serializer */) | (1<<8 /* enable ch */) ;
-  nanosleep(1e9);
+  usleep(1000);
   ACCESS(PWMBASE + 0x8 /* DMAC*/) = (1<<31 /* DMA enable */) | 0x0707;
 
   //activate DMA

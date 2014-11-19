@@ -1,12 +1,13 @@
-CFLAGS = -std=c99 -g -O3 -Wall -Wextra -Wno-unused-parameter
-LDFLAGS = -lm
+CFLAGS = -fPIC -std=c99 -g -O3 -Wall -Wextra -Wno-unused-parameter $(shell pkg-config --cflags jack)
+LDFLAGS = -lm -lrt $(shell pkg-config --libs jack)
 PREFIX = /usr/local
 
 JACKPIFM_SRC=\
-        src/outputter.o \
+	src/outputter.o \
 	src/preemp.o \
 	src/rds.o \
 	src/stereo.o \
+	\
 	src/main.o
 
 all: jackpifm
@@ -14,11 +15,11 @@ all: jackpifm
 
 # Compilation
 %.o: %.c
-	$(CC) $(CFLAGS) $(pkg-config --cflags jack) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Linking
 jackpifm: $(JACKPIFM_SRC)
-	$(CC) $^ $(LDFLAGS) $(pkg-config --libs jack) -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
 
 # Housekeeping
 clean:
@@ -27,4 +28,3 @@ clean:
 install:
 	install -m755 -d $(DESTDIR)$(PREFIX)/bin
 	install -m755 jackpifm $(DESTDIR)$(PREFIX)/bin
-

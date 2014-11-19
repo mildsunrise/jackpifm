@@ -13,7 +13,8 @@ int jackpifm_setup_fm();
 void jackpifm_setup_dma(float centerFreq);
 void jackpifm_unsetup_dma();
 
-void jackpifm_outputter_setup(double sample_rate);
+void jackpifm_outputter_setup(double sample_rate, size_t period_size);
+void jackpifm_outputter_sync();
 void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size);
 
 #ifdef __cplusplus
