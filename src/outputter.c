@@ -78,7 +78,7 @@ static void free_real_mem_page(void* vAddr) {
 int jackpifm_setup_fm() {
   /* open /dev/mem */
   if ((mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
-    fprintf(stderr, "Can't open /dev/mem: %s", strerror(errno));
+    fprintf(stderr, "Can't open /dev/mem: %s\n", strerror(errno));
     return 1;
   }
 
@@ -137,30 +137,26 @@ struct PageInfo {
 
 struct PageInfo constPage;
 struct PageInfo instrPage;
-#define BUFFERINSTRUCTIONS 65536
+#define BUFFERINSTRUCTIONS JACKPIFM_BUFFERINSTRUCTIONS
 struct PageInfo instrs[BUFFERINSTRUCTIONS];
 
 
-static int bufPtr;
+static int bufPtr = 0;
 static float clocksPerSample;
-static struct timespec sleeptime;
-static float fracerror;
-static float timeErr;
+static struct timespec sleeptime = {0, 0};
+static float fracerror = 0;
+static float timeErr = 0;
 
 void jackpifm_outputter_setup(double sample_rate, size_t period_size) {
-  bufPtr = 0;
-  fracerror = 0;
-  timeErr = 0;
   //sleeptime = (float)1e9 * BUFFERINSTRUCTIONS/(4 * sample_rate *2));
-  sleeptime.tv_sec = 0;
-  sleeptime.tv_nsec = ((float)1e9 * period_size) / sample_rate;
+  sleeptime.tv_nsec = round(((double)1e9 * period_size) / sample_rate);
   clocksPerSample = 22500.0 / sample_rate * 1373.5;  // for timing, determined by experiment
 }
 
 void jackpifm_outputter_sync() {
   void *pos = (void *)(ACCESS(DMABASE + 0x04 /* CurBlock*/) & ~ 0x7F);
   for (bufPtr = 0; bufPtr < BUFFERINSTRUCTIONS; bufPtr += 4)
-    if (instrs[bufPtr].p == pos) break;
+    if (instrs[bufPtr].p == pos) return;
 
   // We should never get here
   fprintf(stderr, "Ooops.\n"); //FIXME
@@ -287,7 +283,6 @@ void jackpifm_setup_dma(float centerFreq) {
 }
 
 void jackpifm_unsetup_dma() {
-  printf("exiting\n");
   struct DMAregs* DMA0 = (struct DMAregs*)&(ACCESS(DMABASE));
   DMA0->CS= 1<<31;  // reset DMA controller
 }

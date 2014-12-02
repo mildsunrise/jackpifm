@@ -1,5 +1,5 @@
-CFLAGS = -fPIC -std=c99 -g -O3 -Wall -Wextra -Wno-unused-parameter $(shell pkg-config --cflags jack)
-LDFLAGS = -lm -lrt $(shell pkg-config --libs jack)
+CFLAGS = -fPIC -std=c99 -g -O3 -Wall -Wextra -Wno-unused-parameter $(shell pkg-config --cflags jack samplerate)
+LDFLAGS = -pthread -lm -lrt $(shell pkg-config --libs jack samplerate)
 PREFIX = /usr/local
 
 JACKPIFM_SRC=\

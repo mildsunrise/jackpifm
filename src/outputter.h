@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#define JACKPIFM_BUFFERINSTRUCTIONS 32768
+
 int jackpifm_setup_fm();
 void jackpifm_setup_dma(float centerFreq);
 void jackpifm_unsetup_dma();
