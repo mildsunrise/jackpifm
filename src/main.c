@@ -173,7 +173,8 @@ int process_callback(jack_nframes_t nframes, void *arg) {
 
     // Start thread, if we've reached the delay
     if (!thread_started && iwritten >= delay) {
-      assert(!pthread_create(&thread, NULL, output_thread, NULL));
+      int ret = pthread_create(&thread, NULL, output_thread, NULL);
+      assert(!ret);
       thread_started = true;
     }
   } else {
@@ -240,9 +241,6 @@ void *output_thread(void *arg) {
       } else memcpy(obuffer, ringbuffer + opos, operiod * sizeof(jackpifm_sample_t));
 
       opos = (opos + operiod) % ringsize;
-
-      //printf("\e[J\n\ndiff:  %5d\ndelay: %5u\e[3F", iwritten-owritten, (ringsize + ipos - opos) % ringsize);
-      fflush(stdout);
     } else {
       if (reflowed) fprintf(stderr, "The buffer got empty, delaying! :(\n");
     }
@@ -321,6 +319,7 @@ void start_client(const client_options *opt) {
   // Initialize JACK client
   jack_options_t options = JackNullOption;
   jack_status_t status;
+  int ret;
   if (opt->force_name) options |= JackUseExactName;
   if (opt->server_name) options |= JackServerName;
   jack_client = jack_client_open(opt->name, options, &status, opt->server_name);
@@ -422,9 +421,11 @@ void start_client(const client_options *opt) {
   jack_set_latency_callback(jack_client, latency_callback, NULL);
 
   // Setup FM and subscribe to exit
-  assert(!jackpifm_setup_fm());
+  ret = jackpifm_setup_fm();
+  assert(ret);
   jackpifm_setup_dma(opt->frequency);
   jackpifm_outputter_setup(srate, operiod);
+  printf("Info: carrier frequency %.2f MHz, rate %.3f Hz, period %u frames.\n", opt->frequency, srate, operiod);
 
   // Subscribe signal handlers
   atexit(stop_client);
@@ -434,7 +435,8 @@ void start_client(const client_options *opt) {
   signal(SIGINT, signal_handler);
 
   // ACTIVATE!!!
-  jack_activate(jack_client); //FIXME
+  ret = jack_activate(jack_client);
+  assert(!ret);
 }
 
 void stop_client() {
@@ -524,7 +526,7 @@ void reflow(unsigned int next_reflow) {
   printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %6.2fms.\n", orate, (orate-rate)*100.0/rate, new_rate, (distance-(double)delay)*1000 / rate);
 
   srate = new_rate;
-  new_rate += .5 * (distance - (double)delay) / next_reflow;
+  new_rate += .25 * (distance - (double)delay) / next_reflow;
   jackpifm_outputter_setup(new_rate, operiod);
   reflowed = true;
   iwritten = owritten = 0;
@@ -537,7 +539,6 @@ int main(int argc, char **argv) {
 
   //TODO: option parsing and checking
   options.frequency = atof(argv[1]);
-  printf("Using frequency %.2f MHz\n", options.frequency);
 
   start_client(&options);
 
