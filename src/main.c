@@ -83,12 +83,12 @@ static size_t delay;    // Initial/target delay between writing and reading to r
 static size_t min_lat;  // Minimum latency in JACK frames, from reading from JACK until emitting over FM. This is the latency we try to approximate.
 static size_t max_lat;  // Maximum latency in JACK frames, from reading from JACK until emitting over FM.
 
-static volatile size_t iwritten; // Counts samples we attempted to write to ringbuffer, from JACK. [mutex]
-static volatile size_t owritten; // Counts samples we attempted to write from the ringbuffer, to GPIO. [mutex]
-static volatile size_t ipos;     // Input position inside the ring buffer (i.e. where to write next). [mutex]
-static volatile size_t opos;     // Output position inside the ring buffer (i.e. where to read next). [mutex]
-static volatile double srate;    // Rate at which we last setup the GPIO. [mutex]
-static volatile double orate;    // Real rate at which we write from the ringbuffer, to the GPIO. [mutex]
+static volatile uint64_t iwritten; // Counts samples we attempted to write to ringbuffer, from JACK. [mutex]
+static volatile uint64_t owritten; // Counts samples we attempted to write from the ringbuffer, to GPIO. [mutex]
+static volatile size_t ipos;       // Input position inside the ring buffer (i.e. where to write next). [mutex]
+static volatile size_t opos;       // Output position inside the ring buffer (i.e. where to read next). [mutex]
+static volatile double srate;      // Rate at which we last setup the GPIO. [mutex]
+static volatile double orate;      // Real rate at which we write from the ringbuffer, to the GPIO. [mutex]
 
 // Other parameters
 static jack_client_t *jack_client;
