@@ -270,7 +270,8 @@ typedef struct {
   size_t period_size;
   size_t ringsize;
   int converter_type;
-  long reflow;
+  int calibration_reflows;
+  int reflow_time;
 
   // JACK
   const char *name;
@@ -309,6 +310,7 @@ void start_client(const client_options *opt) {
   if (opt->resample) {
     resampler = src_new(opt->converter_type, channels, &error);
     assert(resampler);
+    assert(sizeof(jackpifm_sample_t) == sizeof(float));
 
     resampler_data.end_of_input = 0;
     resampler_data.src_ratio = rate / (double)jrate;
@@ -454,9 +456,10 @@ static const client_options default_values = {
   // Resampling
   false, // resamp
   512,   // period_size
-  8092,  // ringsize
+  8192,  // ringsize
   SRC_LINEAR, // converter_type
-  10,    // reflow
+  4,     // calibration reflows
+  40,    // reflow time
 
   // JACK
   "jackpifm", // name
@@ -464,6 +467,23 @@ static const client_options default_values = {
   false, // force_name
   {NULL, NULL}, // target_ports
 };
+
+void reflow(unsigned int next_reflow) {
+  pthread_mutex_lock(&mutex);
+
+  size_t distance = (ringsize + ipos - opos) % ringsize;
+  orate = rate * ((double)owritten / (double)iwritten);
+  double new_rate = srate + (rate - orate) / 2;
+  printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %6.2fms.\n", orate, (orate-rate)*100.0/rate, new_rate, (distance-(double)delay)*1000 / rate);
+
+  srate = new_rate;
+  new_rate += .5 * (distance - (double)delay) / next_reflow;
+  jackpifm_outputter_setup(new_rate, operiod);
+  reflowed = true;
+  iwritten = owritten = 0;
+
+  pthread_mutex_unlock(&mutex);
+}
 
 int main(int argc, char **argv) {
   client_options options = default_values;
@@ -474,28 +494,22 @@ int main(int argc, char **argv) {
 
   start_client(&options);
 
-  // Keep reflowing until end
-  while (1) {
-    sleep(options.reflow);
-
-    pthread_mutex_lock(&mutex);
-    if (!thread_running) {
-      pthread_mutex_unlock(&mutex);
-      break;
+  // Do calibration reflows
+  if (options.calibration_reflows > 0) {
+    printf("Starting calibration stage (duration %d * %d sec)...\n", options.calibration_reflows, options.reflow_time);
+    sleep(5);
+    reflow(options.reflow_time);
+    for (int i = 0; i < options.calibration_reflows-1; i++) {
+      sleep(options.reflow_time);
+      reflow(options.reflow_time);
     }
+  }
 
-    size_t distance = (ringsize + ipos - opos) % ringsize;
-    orate = rate * (owritten / (double)iwritten);
-    double new_rate = srate + (rate - orate) / 2;
-    printf("Reflow, real %.3f Hz, current %.3f Hz, new %.3f Hz\n", orate, srate, new_rate);
-
-    srate = new_rate;
-    new_rate += .5 * (distance - (double)delay) / options.reflow;
-    jackpifm_outputter_setup(new_rate, operiod);
-    reflowed = true;
-    iwritten = owritten = 0;
-
-    pthread_mutex_unlock(&mutex);
+  // Keep reflowing until end
+  printf("Calibration stage finished.\n");
+  while (1) {
+    sleep(options.reflow_time);
+    reflow(options.reflow_time);
   }
 
   return 0;
