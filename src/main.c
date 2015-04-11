@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
+#include <errno.h>
 #include <math.h>
 
 #include "preemp.h"
@@ -97,6 +98,7 @@ static pthread_t thread;
 static pthread_mutex_t mutex;
 static jackpifm_preemp_t **preemp;
 static jackpifm_stereo_t *stereo;
+static const uint8_t *rds_data;
 static jackpifm_rds_t *rds;
 static SRC_STATE *resampler;
 static SRC_DATA resampler_data;
@@ -283,6 +285,38 @@ typedef struct {
 void stop_client();
 void signal_handler(int);
 
+void read_file(const char *name, uint8_t **file_data, size_t *file_size) {
+  int r;
+  FILE* file = fopen(name, "r");
+  if (file == NULL) {
+    fprintf(stderr, "Couldn't open '%s': %s\n", name, strerror(errno));
+    abort();
+  }
+
+  size_t asize = 64;
+  uint8_t *data = jackpifm_malloc(asize);
+  size_t size = 0;
+  while (!feof(file)) {
+    size += fread(data + size, 1, 64, file);
+    assert(!ferror(file));
+    if (size + 64 > asize) {
+      asize += 64;
+      data = jackpifm_realloc(data, asize);
+    }
+  }
+
+  r = fclose(file);
+  assert(!r);
+}
+
+void connect_jack_port(jack_client_t *client, jack_port_t *port, const char *name) {
+  if (!name) return;
+  if (jack_connect(client, name, jack_port_name(port))) {
+    fprintf(stderr, "Couldn't connect to '%s'.\n", name);
+    abort();
+  }
+}
+
 void start_client(const client_options *opt) {
   // Initialize JACK client
   jack_options_t options = JackNullOption;
@@ -342,7 +376,17 @@ void start_client(const client_options *opt) {
   } else preemp = NULL;
 
   stereo = opt->stereo ? jackpifm_stereo_new() : NULL;
-  rds = opt->rds_file ? NULL : NULL; //TODO
+
+  if (opt->rds_file) {
+    uint8_t *data;
+    size_t size;
+    read_file(opt->rds_file, &data, &size);
+    rds_data = data;
+    rds = jackpifm_rds_new(data, size);
+  } else {
+    rds_data = NULL;
+    rds = NULL;
+  }
 
   // Create ports
   unsigned long port_flags = JackPortIsInput | JackPortIsTerminal | JackPortIsPhysical;
@@ -350,10 +394,12 @@ void start_client(const client_options *opt) {
     jack_ports[0] = jack_port_register(jack_client, "left", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     jack_ports[1] = jack_port_register(jack_client, "right", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     assert(jack_ports[0] && jack_ports[1]);
-    //TODO: connect ports
+    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);
+    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[1]);
   } else {
     jack_ports[0] = jack_port_register(jack_client, "in", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     assert(jack_ports[0]);
+    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);
   }
 
   // Calculate latency
@@ -428,6 +474,7 @@ void stop_client() {
 
   jackpifm_stereo_free(stereo);
   jackpifm_rds_free(rds);
+  free((uint8_t *)rds_data);
 
   // Unsetup FM
   jackpifm_unsetup_dma();
