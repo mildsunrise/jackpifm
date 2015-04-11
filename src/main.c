@@ -80,6 +80,8 @@ static size_t operiod;  // Period size at which we read from the ringbuffer.
 static size_t jrate;    // "Theoretical" rate at which we read from JACK.
 static size_t rate;     // "Theoretical" target rate, which jrate and orate should approximate.
 static size_t delay;    // Initial/target delay between writing and reading to ringbuffer.
+static size_t min_lat;  // Minimum latency in JACK frames, from reading from JACK until emitting over FM. This is the latency we try to approximate.
+static size_t max_lat;  // Maximum latency in JACK frames, from reading from JACK until emitting over FM.
 
 static volatile size_t iwritten; // Counts samples we attempted to write to ringbuffer, from JACK. [mutex]
 static volatile size_t owritten; // Counts samples we attempted to write from the ringbuffer, to GPIO. [mutex]
@@ -207,20 +209,9 @@ void set_port_latency(jack_port_t *port, jack_nframes_t min, jack_nframes_t max)
 void latency_callback(jack_latency_callback_mode_t mode, void *arg) {
   if (mode != JackPlaybackLatency) return;
 
-  // Minimum latency is (GPIO latency)
-  size_t min = (JACKPIFM_BUFFERINSTRUCTIONS / 4);
-  // Maximum latency is (GPIO latency + ringsize)
-  size_t max = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + ringsize;
-
-  // Convert min and max into JACK time samples
-  min = roundf(min * jrate / (float)rate);
-  max = roundf(max * jrate / (float)rate);
-
-  set_port_latency(jack_ports[0], min, max);
+  set_port_latency(jack_ports[0], min_lat, max_lat);
   if (stereo)
-    set_port_latency(jack_ports[1], min, max);
-
-  printf("Latency: %u frames min, %u frames max\n", min, max);
+    set_port_latency(jack_ports[1], min_lat, max_lat);
 }
 
 
@@ -362,6 +353,19 @@ void start_client(const client_options *opt) {
     jack_ports[0] = jack_port_register(jack_client, "in", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     assert(jack_ports[0]);
   }
+
+  // Calculate latency
+  // Minimum latency is (GPIO latency)
+  min_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4);
+  // Maximum latency is (GPIO latency + ringsize)
+  max_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + ringsize;
+
+  // Convert min and max into JACK time samples
+  min_lat = roundf(min_lat * jrate / (float)rate);
+  max_lat = roundf(max_lat * jrate / (float)rate);
+
+  printf("Typical / minimum latency: %u frames (%.2fms)\n", min_lat, min_lat*1000 / (double)jrate);
+  printf("Worst case / maximum latency: %u frames (%.2fms)\n", max_lat, max_lat*1000 / (double)jrate);
 
   // Set JACK callbacks
   jack_set_process_callback(jack_client, process_callback, NULL);
