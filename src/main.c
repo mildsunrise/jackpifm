@@ -266,13 +266,15 @@ typedef struct {
   bool preemp;
   const char *rds_file;
 
+  // Reflow
+  int reflow_time;
+  int calibration_reflows;
+
   // Resampling
   bool resample;
   size_t period_size;
   size_t ringsize;
   int converter_type;
-  int calibration_reflows;
-  int reflow_time;
 
   // JACK
   const char *name;
@@ -325,6 +327,7 @@ void start_client(const client_options *opt) {
   if (opt->server_name) options |= JackServerName;
   jack_client = jack_client_open(opt->name, options, &status, opt->server_name);
   assert(jack_client);
+  printf("Info: registered as '%s'\n", jack_get_client_name(jack_client));
 
   // Set parameters
   iwritten = owritten = 0;
@@ -510,13 +513,15 @@ static const client_options default_values = {
   true,  // preemp
   NULL,  // rds_file
 
+  // Reflow options
+  40,    // reflow time
+  5,     // calibration reflows
+
   // Resampling
   false, // resamp
   512,   // period_size
   8192,  // ringsize
   SRC_LINEAR, // converter_type
-  4,     // calibration reflows
-  40,    // reflow time
 
   // JACK
   "jackpifm", // name
