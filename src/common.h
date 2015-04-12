@@ -18,6 +18,13 @@
 extern "C" {
 #endif
 
+
+#define JACKPIFM_VERSION "1.0.0-pre"
+#define JACKPIFM_VERSION_MAJOR 1
+#define JACKPIFM_VERSION_MINOR 0
+#define JACKPIFM_VERSION_REVISION 0
+
+
 typedef jack_default_audio_sample_t jackpifm_sample_t;
 
 /* malloc / realloc / calloc wrappers */
@@ -35,6 +42,7 @@ typedef jack_default_audio_sample_t jackpifm_sample_t;
 JACKPIFM_ALLOC_WRAPPER(malloc(size_t size), malloc(size));
 JACKPIFM_ALLOC_WRAPPER(calloc(size_t nmemb, size_t size), calloc(nmemb, size));
 JACKPIFM_ALLOC_WRAPPER(realloc(void *ptr, size_t size), realloc(ptr, size));
+
 
 #ifdef __cplusplus
 }

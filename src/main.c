@@ -259,29 +259,7 @@ void *output_thread(void *arg) {
 // [DE-]INITIALIZATION LOGIC
 // -------------------------
 
-typedef struct {
-  // Emission
-  float frequency;
-  bool stereo;
-  bool preemp;
-  const char *rds_file;
-
-  // Reflow
-  int reflow_time;
-  int calibration_reflows;
-
-  // Resampling
-  bool resample;
-  size_t period_size;
-  size_t ringsize;
-  int converter_type;
-
-  // JACK
-  const char *name;
-  const char *server_name;
-  bool force_name;
-  const char *target_ports[2];
-} client_options;
+#include "options.c"
 
 void stop_client();
 void signal_handler(int);
@@ -503,32 +481,8 @@ void signal_handler(int sig) {
 }
 
 
-// MAIN (OPTION PARSING)
-// ---------------------
-
-static const client_options default_values = {
-  // Emission
-  103.3, // frequency
-  false, // stereo
-  true,  // preemp
-  NULL,  // rds_file
-
-  // Reflow options
-  40,    // reflow time
-  5,     // calibration reflows
-
-  // Resampling
-  false, // resamp
-  512,   // period_size
-  8192,  // ringsize
-  SRC_LINEAR, // converter_type
-
-  // JACK
-  "jackpifm", // name
-  NULL,  // server_name
-  false, // force_name
-  {NULL, NULL}, // target_ports
-};
+// MAIN LOGIC
+// ----------
 
 void reflow(unsigned int next_reflow) {
   pthread_mutex_lock(&mutex);
@@ -547,10 +501,8 @@ void reflow(unsigned int next_reflow) {
 }
 
 int main(int argc, char **argv) {
-  client_options options = default_values;
-
-  //TODO: option parsing and checking
-  options.frequency = atof(argv[1]);
+  client_options options;
+  parse_jackpifm_options(&options, argc, argv);
 
   start_client(&options);
 
