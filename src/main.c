@@ -108,7 +108,7 @@ static jackpifm_sample_t *obuffer;
 static jackpifm_sample_t *ringbuffer; // [mutex]
 static volatile bool thread_started; // [mutex]
 static volatile bool thread_running; // [mutex]
-static volatile bool reflowed; // [mutex]
+static volatile bool calibrated; // [mutex]
 
 
 // JACK CALLBACKS
@@ -179,7 +179,7 @@ int process_callback(jack_nframes_t nframes, void *arg) {
       thread_started = true;
     }
   } else {
-    if (reflowed) fprintf(stderr, "Got too many frames from JACK, dropping :(\n");
+    if (calibrated) fprintf(stderr, "Got too many frames from JACK, dropping :(\n");
   }
 
   iwritten += out_period;
@@ -243,7 +243,7 @@ void *output_thread(void *arg) {
 
       opos = (opos + operiod) % ringsize;
     } else {
-      if (reflowed) fprintf(stderr, "The buffer got empty, delaying! :(\n");
+      if (calibrated) fprintf(stderr, "The buffer got empty, delaying! :(\n");
     }
 
     owritten += operiod;
@@ -337,7 +337,7 @@ void start_client(const client_options *opt) {
   srate = rate;
 
   delay = opt->ringsize / 2;
-  reflowed = false;
+  calibrated = false;
 
   // Setup resampler
   int error, channels = opt->stereo ? 2 : 1;
@@ -535,7 +535,6 @@ void reflow(unsigned int next_reflow) {
   srate = new_rate;
   new_rate += .25 * (distance - (double)delay) / next_reflow;
   jackpifm_outputter_setup(new_rate, operiod);
-  reflowed = true;
   iwritten = owritten = 0;
 
   pthread_mutex_unlock(&mutex);
@@ -562,6 +561,10 @@ int main(int argc, char **argv) {
 
   // Keep reflowing until end
   printf("Calibration stage finished.\n");
+  pthread_mutex_lock(&mutex);
+  calibrated = true;
+  pthread_mutex_unlock(&mutex);
+
   while (1) {
     sleep(options.reflow_time);
     reflow(options.reflow_time);
