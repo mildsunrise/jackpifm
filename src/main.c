@@ -81,7 +81,8 @@ static size_t operiod;  // Period size at which we read from the ringbuffer.
 static size_t jrate;    // "Theoretical" rate at which we read from JACK.
 static size_t rate;     // "Theoretical" target rate, which jrate and orate should approximate.
 static size_t delay;    // Initial/target delay between writing and reading to ringbuffer.
-static size_t min_lat;  // Minimum latency in JACK frames, from reading from JACK until emitting over FM. This is the latency we try to approximate.
+static size_t min_lat;  // Minimum latency in JACK frames, from reading from JACK until emitting over FM.
+static size_t tar_lat;  // Target latency in JACK frames, from reading from JACK until emitting over FM, which we try to approximate.
 static size_t max_lat;  // Maximum latency in JACK frames, from reading from JACK until emitting over FM.
 
 static volatile uint64_t iwritten; // Counts samples we attempted to write to ringbuffer, from JACK. [mutex]
@@ -404,15 +405,20 @@ void start_client(const client_options *opt) {
   // Calculate latency
   // Minimum latency is (GPIO latency)
   min_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4);
+  // Target latency is (GPIO latency + delay)
+  tar_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + delay;
   // Maximum latency is (GPIO latency + ringsize)
   max_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + ringsize;
 
-  // Convert min and max into JACK time samples
+  // Convert min, tar and max into JACK time samples
   min_lat = roundf(min_lat * jrate / (float)rate);
+  tar_lat = roundf(tar_lat * jrate / (float)rate);
   max_lat = roundf(max_lat * jrate / (float)rate);
 
-  printf("Typical / minimum latency: %u frames (%.2fms)\n", min_lat, min_lat*1000 / (double)jrate);
-  printf("Worst case / maximum latency: %u frames (%.2fms)\n", max_lat, max_lat*1000 / (double)jrate);
+  printf("Info: minimum latency is %u frames (%.2fms)\n", min_lat, min_lat*1000 / (double)jrate);
+  printf("Info: target latency is %u frames (%.2fms)\n", tar_lat, tar_lat*1000 / (double)jrate);
+  printf("Info: maximum latency is %u frames (%.2fms)\n", max_lat, max_lat*1000 / (double)jrate);
+  min_lat = max_lat = tar_lat; // FIXME remove this
 
   // Set JACK callbacks
   jack_set_process_callback(jack_client, process_callback, NULL);
