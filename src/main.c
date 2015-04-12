@@ -362,6 +362,7 @@ void start_client(const client_options *opt) {
   ringbuffer = jackpifm_calloc(ringsize, sizeof(jackpifm_sample_t));
   obuffer = jackpifm_calloc(operiod, sizeof(jackpifm_sample_t));
   ipos = opos = 0;
+  printf("Info: created ringbuffer of %d frames.\n", ringsize);
 
   // Prepare thread / mutex
   pthread_mutex_init(&mutex, NULL);
@@ -552,10 +553,9 @@ int main(int argc, char **argv) {
   if (options.calibration_reflows > 0) {
     printf("Starting calibration stage (duration %d * %d sec)...\n", options.calibration_reflows, options.reflow_time);
     sleep(5);
-    reflow(options.reflow_time);
-    for (int i = 0; i < options.calibration_reflows-1; i++) {
-      sleep(options.reflow_time);
+    for (int i = 0; i < options.calibration_reflows; i++) {
       reflow(options.reflow_time);
+      sleep(options.reflow_time);
     }
   }
 
@@ -566,8 +566,8 @@ int main(int argc, char **argv) {
   pthread_mutex_unlock(&mutex);
 
   while (1) {
-    sleep(options.reflow_time);
     reflow(options.reflow_time);
+    sleep(options.reflow_time);
   }
 
   return 0;
