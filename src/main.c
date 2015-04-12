@@ -376,15 +376,12 @@ void start_client(const client_options *opt) {
     jack_ports[0] = jack_port_register(jack_client, "left", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     jack_ports[1] = jack_port_register(jack_client, "right", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     assert(jack_ports[0] && jack_ports[1]);
-    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);
-    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[1]);
   } else {
     jack_ports[0] = jack_port_register(jack_client, "in", JACK_DEFAULT_AUDIO_TYPE, port_flags, 0);
     assert(jack_ports[0]);
-    connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);
   }
 
-  // Calculate latency
+  // Calculate latency // FIXME: Take that 4 out
   // Minimum latency is (GPIO latency)
   min_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4);
   // Target latency is (GPIO latency + delay)
@@ -426,6 +423,11 @@ void start_client(const client_options *opt) {
   ret = jack_activate(jack_client);
   assert(!ret);
   printf("\n");
+
+  // Connect ports
+  connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);
+  if (stereo)
+    connect_jack_port(jack_client, jack_ports[1], opt->target_ports[1]);
 }
 
 void stop_client() {
