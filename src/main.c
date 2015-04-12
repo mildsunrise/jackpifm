@@ -422,7 +422,7 @@ void start_client(const client_options *opt) {
 
   // Setup FM and subscribe to exit
   ret = jackpifm_setup_fm();
-  assert(ret);
+  assert(!ret);
   jackpifm_setup_dma(opt->frequency);
   jackpifm_outputter_setup(srate, operiod);
   printf("Info: carrier frequency %.2f MHz, rate %.3f Hz, period %u frames.\n", opt->frequency, srate, operiod);
@@ -437,6 +437,7 @@ void start_client(const client_options *opt) {
   // ACTIVATE!!!
   ret = jack_activate(jack_client);
   assert(!ret);
+  printf("\n");
 }
 
 void stop_client() {
@@ -523,7 +524,7 @@ void reflow(unsigned int next_reflow) {
   size_t distance = (ringsize + ipos - opos) % ringsize;
   orate = rate * ((double)owritten / (double)iwritten);
   double new_rate = srate + (rate - orate) / 2;
-  printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %6.2fms.\n", orate, (orate-rate)*100.0/rate, new_rate, (distance-(double)delay)*1000 / rate);
+  printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %d frames (%6.2fms).\n", orate, (orate-rate)*100.0/rate, new_rate, distance-delay, (distance-(double)delay)*1000 / rate);
 
   srate = new_rate;
   new_rate += .25 * (distance - (double)delay) / next_reflow;

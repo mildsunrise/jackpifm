@@ -3,6 +3,8 @@
 #ifndef JACKPIFM_COMMON_H
 #define JACKPIFM_COMMON_H
 
+#define _POSIX_C_SOURCE 199309L
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>

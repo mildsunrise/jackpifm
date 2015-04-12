@@ -1,5 +1,6 @@
 #include "outputter.h"
 
+#include <malloc.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -7,8 +8,6 @@
 #include <math.h>
 #include <time.h>
 #include <sys/mman.h>
-
-//TODO
 
 #define PAGE_SIZE (4*1024)
 #define BLOCK_SIZE (4*1024)
@@ -91,19 +90,15 @@ int jackpifm_setup_fm() {
       0x20000000  //base
   );
 
-  if ((int)allof7e==-1) exit(-1);
+  if ((int)allof7e==-1) return 1;
 
   SETBIT(GPFSEL0 , 14);
   CLRBIT(GPFSEL0 , 13);
   CLRBIT(GPFSEL0 , 12);
 
   struct GPCTL setupword = {6/*SRC*/, 1, 0, 0, 0, 1,0x5a};
-  ACCESS(CM_GP0CTL) = *((int*)&setupword);
+  ACCESS(CM_GP0CTL) = *((int*)(&setupword));
   return 0;
-}
-
-static void modulate(int m) {
-  ACCESS(CM_GP0DIV) = (0x5a << 24) + 0x4d72 + m;
 }
 
 
@@ -159,12 +154,12 @@ void jackpifm_outputter_sync() {
     if (instrs[bufPtr].p == pos) return;
 
   // We should never get here
-  fprintf(stderr, "Ooops.\n"); //FIXME
+  abort();
 }
 
 void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
   for (size_t i = 0; i < size; i++) {
-    float value = data[i]*8;  // modulation index (AKA volume!)
+    float value = data[i] * 8;  // modulation index (AKA volume!)
     value += fracerror;  // error that couldn't be encoded from last time.
 
     int intval = (int)(round(value));  // integer component
@@ -191,7 +186,7 @@ void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
     time++;
 
     while( (ACCESS(DMABASE + 0x04 /* CurBlock*/) & ~ 0x7F) ==  (int)(instrs[bufPtr].p)) {
-      nanosleep(&sleeptime);  // are we anywhere in the next 4 instructions?
+      nanosleep(&sleeptime, NULL);  // are we anywhere in the next 4 instructions?
     }
 
     // Create DMA command to set clock controller to output FM signal for PWM "LOW" time.
@@ -213,11 +208,13 @@ void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
 }
 
 
-void jackpifm_setup_dma(float centerFreq) {
+static struct timespec millisecond_wait = {0, 1e6};
+
+void jackpifm_setup_dma(float center_freq) {
   // allocate a few pages of ram
   get_real_mem_page(&constPage.v, &constPage.p);
 
-  int centerFreqDivider = (int)((500.0 / centerFreq) * (float)(1<<12) + 0.5);
+  int centerFreqDivider = (int)((500.0 / center_freq) * (float)(1<<12) + 0.5);
 
   // make data page contents - it's essientially 1024 different commands for the
   // DMA controller to send to the clock module at the correct time.
@@ -232,7 +229,7 @@ void jackpifm_setup_dma(float centerFreq) {
     // make copy instructions
     struct CB* instr0= (struct CB*)instrPage.v;
 
-    for (int i=0; i<4096/sizeof(struct CB); i++) {
+    for (size_t i=0; i<4096/sizeof(struct CB); i++) {
       instrs[instrCnt].v = (void*)((int)instrPage.v + sizeof(struct CB)*i);
       instrs[instrCnt].p = (void*)((int)instrPage.p + sizeof(struct CB)*i);
       instr0->SOURCE_AD = (unsigned int)constPage.p+2048;
@@ -259,18 +256,18 @@ void jackpifm_setup_dma(float centerFreq) {
 
   // set up a clock for the PWM
   ACCESS(CLKBASE + 40*4 /*PWMCLK_CNTL*/) = 0x5A000026;
-  usleep(1000);
+  nanosleep(&millisecond_wait, NULL);
   ACCESS(CLKBASE + 41*4 /*PWMCLK_DIV*/)  = 0x5A002800;
   ACCESS(CLKBASE + 40*4 /*PWMCLK_CNTL*/) = 0x5A000016;
-  usleep(1000);
+  nanosleep(&millisecond_wait, NULL);
 
   // set up PWM
   ACCESS(PWMBASE + 0x0 /* CTRL*/) = 0;
-  usleep(1000);
+  nanosleep(&millisecond_wait, NULL);
   ACCESS(PWMBASE + 0x4 /* status*/) = -1;  // clear errors
-  usleep(1000);
+  nanosleep(&millisecond_wait, NULL);
   ACCESS(PWMBASE + 0x0 /* CTRL*/) = -1; //(1<<13 /* Use fifo */) | (1<<10 /* repeat */) | (1<<9 /* serializer */) | (1<<8 /* enable ch */) ;
-  usleep(1000);
+  nanosleep(&millisecond_wait, NULL);
   ACCESS(PWMBASE + 0x8 /* DMAC*/) = (1<<31 /* DMA enable */) | 0x0707;
 
   //activate DMA

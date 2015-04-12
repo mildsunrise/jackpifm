@@ -12,7 +12,7 @@ extern "C" {
 #define JACKPIFM_BUFFERINSTRUCTIONS 32768
 
 int jackpifm_setup_fm();
-void jackpifm_setup_dma(float centerFreq);
+void jackpifm_setup_dma(float center_freq);
 void jackpifm_unsetup_dma();
 
 void jackpifm_outputter_setup(double sample_rate, size_t period_size);
