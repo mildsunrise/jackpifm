@@ -127,7 +127,7 @@ static const client_options default_values = {
   // Resampling
   false, // resamp
   512,   // period_size
-  8192,  // ringsize
+  16384, // ringsize
   SRC_LINEAR, // converter_type
 
   // JACK
@@ -166,9 +166,9 @@ static void print_help(const char *basename) {
 
   // Sampling options
   printf("Sampling options:\n");
-  print_option('r', "resamp", "Resample sound to 192kHz before emission.");
+  print_option('r', "resamp", "Resample sound to 152kHz before emission.");
   print_option('p', "period=FRAMES", "Output (emission) period in frames. [default: 512]");
-  print_option('r', "ringsize=FRAMES", "Size of the ringbuffer in frames. [default: 8192]");
+  print_option('r', "ringsize=FRAMES", "Size of the ringbuffer in frames. [default: 16384]");
   print_option(  0, "resamp-type=TYPE", "Resampling algorithm to use. [default: linear]");
   printf("\n");
 
