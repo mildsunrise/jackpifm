@@ -117,49 +117,49 @@ void *output_thread(void *arg);
 // The main "process" callback. We receive samples from Jack,
 // preprocess them and write them to the ringbuffer.
 int process_callback(jack_nframes_t nframes, void *arg) {
-  jackpifm_sample_t *out;
-  size_t out_period; // should be iperiod
+  jackpifm_sample_t *ibuffer;
+  size_t iperiod;
 
   // Preemp, resample and stereo modulate
   if (stereo) {
     jackpifm_sample_t *left = jack_port_get_buffer(jack_ports[0], jperiod);
     jackpifm_sample_t *right = jack_port_get_buffer(jack_ports[1], jperiod);
-    out_period = jperiod;
+    iperiod = jperiod;
 
     if (preemp) {
-      jackpifm_preemp_process(preemp[0], left, out_period);
-      jackpifm_preemp_process(preemp[1], right, out_period);
+      jackpifm_preemp_process(preemp[0], left, iperiod);
+      jackpifm_preemp_process(preemp[1], right, iperiod);
     }
 
     // We assume resampling is enabled
-    size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], left, out_period);
-    size_t result_b = jackpifm_resamp_process(resampler[1], resampler_buffer[1], right, out_period);
+    size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], left, iperiod);
+    size_t result_b = jackpifm_resamp_process(resampler[1], resampler_buffer[1], right, iperiod);
     // Since both resamplers are fed the same number
     // of samples at the same time, it's safe to assume
     // they always return the same number of samples.
     assert(result == result_b);
-    out_period = result;
+    iperiod = result;
 
-    jackpifm_stereo_process(stereo, resampler_buffer[0], left, right, out_period);
-    out = resampler_buffer[0];
+    jackpifm_stereo_process(stereo, resampler_buffer[0], left, right, iperiod);
+    ibuffer = resampler_buffer[0];
   } else {
-    out = jack_port_get_buffer(jack_ports[0], jperiod); //FIXME is it safe to work over that buffer?
-    out_period = jperiod;
+    ibuffer = jack_port_get_buffer(jack_ports[0], jperiod);
+    iperiod = jperiod;
 
     if (preemp)
-      jackpifm_preemp_process(preemp[0], out, out_period);
+      jackpifm_preemp_process(preemp[0], ibuffer, iperiod);
 
-    if (resampler) {
-      size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], out, out_period);
-      out = resampler_buffer[0];
-      out_period = result;
+    if (resampler[0]) {
+      size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], ibuffer, iperiod);
+      ibuffer = resampler_buffer[0];
+      iperiod = result;
     }
   }
 
   // Apply RDS encoding (if needed)
   if (rds)
     // We assume resampling is enabled
-    jackpifm_rds_process(rds, out, out_period);
+    jackpifm_rds_process(rds, ibuffer, iperiod);
 
 
   pthread_mutex_lock(&mutex);
@@ -169,15 +169,15 @@ int process_callback(jack_nframes_t nframes, void *arg) {
   }
 
   // Check that we don't overwrite
-  if ((ringsize + ipos - opos) % ringsize <= ringsize - out_period) {
+  if ((ringsize + ipos - opos) % ringsize <= ringsize - iperiod) {
     // Write to ringbuffer
-    if (ipos + out_period > ringsize) {
+    if (ipos + iperiod > ringsize) {
       size_t delta = ringsize - ipos;
-      memcpy(ringbuffer + ipos, out, delta * sizeof(jackpifm_sample_t));
-      memcpy(ringbuffer, out + delta, (out_period - delta) * sizeof(jackpifm_sample_t));
-    } else memcpy(ringbuffer + ipos, out, out_period * sizeof(jackpifm_sample_t));
+      memcpy(ringbuffer + ipos, ibuffer, delta * sizeof(jackpifm_sample_t));
+      memcpy(ringbuffer, ibuffer + delta, (iperiod - delta) * sizeof(jackpifm_sample_t));
+    } else memcpy(ringbuffer + ipos, ibuffer, iperiod * sizeof(jackpifm_sample_t));
 
-    ipos = (ipos + out_period) % ringsize;
+    ipos = (ipos + iperiod) % ringsize;
 
     // Start thread, if we've reached the delay
     if (!thread_started && iwritten >= delay) {
@@ -189,7 +189,7 @@ int process_callback(jack_nframes_t nframes, void *arg) {
     if (calibrated) fprintf(stderr, "Got too many frames from JACK, dropping :(\n");
   }
 
-  iwritten += out_period;
+  iwritten += iperiod;
   pthread_mutex_unlock(&mutex);
 
   return 0;
@@ -324,15 +324,20 @@ void start_client(const client_options *opt) {
   rate = opt->resample ? 152000 : jrate;
   srate = rate;
 
+  if (opt->ringsize < 2*jperiod*rate/jrate) {
+    fprintf(stderr, "Ringbuffer has to be at least 2x the real period size (%d).\n", jperiod*rate/jrate);
+    abort();
+  }
+
   delay = opt->ringsize / 2;
   calibrated = false;
 
   // Setup resampler
-  int error, channels = opt->stereo ? 2 : 1;
+  int channels = opt->stereo ? 2 : 1;
   if (opt->resample) {
     double ratio = jrate / (float)rate;
     size_t iperiod = (int)(1.02 * jperiod / ratio);
-    for (size_t i = 0; i < channels; i++) {
+    for (int i = 0; i < channels; i++) {
       resampler[i] = jackpifm_resamp_new(jrate / (float)rate, opt->resamp_quality, opt->resamp_squality);
       resampler_buffer[i] = jackpifm_calloc(channels * iperiod, sizeof(jackpifm_sample_t));
     }
@@ -450,8 +455,8 @@ void stop_client() {
   // Free everything
   int channels = stereo ? 2 : 1;
   if (resampler[0]) {
-    for (size_t i = 0; i < channels; i++) {
-      free(resampler_buffers[i]);
+    for (int i = 0; i < channels; i++) {
+      free(resampler_buffer[i]);
       jackpifm_resamp_free(resampler[i]);
     }
   }

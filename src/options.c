@@ -118,7 +118,7 @@ static const client_options default_values = {
   // Emission
   103.3, // frequency
   false, // stereo
-  NULL,  // rds_file
+  NULL,  // RDS blob file
   true,  // preemp
 
   // Reflow options
@@ -133,10 +133,10 @@ static const client_options default_values = {
   10,    // resamp squality
 
   // JACK
-  "jackpifm", // name
-  NULL,  // server_name
-  false, // force_name
-  {NULL, NULL}, // target_ports
+  "jackpifm", // client name
+  NULL,  // server name
+  false, // force name
+  {NULL, NULL}, // target ports
 };
 
 static void print_help(const char *basename) {
@@ -358,7 +358,7 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
 
   if (strcmp(opt, "resamp-quality") == 0 && next) {
     long size;
-    if (parse_int(next, &size) && frames > 1 && frames < 1e6) {
+    if (parse_int(next, &size) && size > 1 && size < 1e6) {
       data->resamp_quality = size;
       return 2;
     }
@@ -368,7 +368,7 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
 
   if (strcmp(opt, "resamp-squality") == 0 && next) {
     long size;
-    if (parse_int(next, &size) && frames > 1 && frames < 1e6) {
+    if (parse_int(next, &size) && size > 1 && size < 1e6) {
       data->resamp_squality = size;
       return 2;
     }
