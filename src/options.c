@@ -101,7 +101,8 @@ typedef struct {
   bool resample;
   size_t period_size;
   size_t ringsize;
-  int converter_type;
+  size_t resamp_quality;
+  size_t resamp_squality;
 
   // JACK
   const char *name;
@@ -128,7 +129,8 @@ static const client_options default_values = {
   false, // resamp
   512,   // period_size
   16384, // ringsize
-  SRC_LINEAR, // converter_type
+  5,     // resamp quality
+  10,    // resamp squality
 
   // JACK
   "jackpifm", // name
@@ -169,7 +171,8 @@ static void print_help(const char *basename) {
   print_option('r', "resamp", "Resample sound to 152kHz before emission.");
   print_option('p', "period=FRAMES", "Output (emission) period in frames. [default: 512]");
   print_option('r', "ringsize=FRAMES", "Size of the ringbuffer in frames. [default: 16384]");
-  print_option(  0, "resamp-type=TYPE", "Resampling algorithm to use. [default: linear]");
+  print_option(  0, "resamp-quality=N", "Resampling lookup table row size. [default: 5]");
+  print_option(  0, "resamp-squality=N", "Resampling lookup table column size. [default: 10]");
   printf("\n");
 
   // JACK options
@@ -353,19 +356,24 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
     return 0;
   }
 
-  if (strcmp(opt, "resamp-type") == 0 && next) {
-    int type;
-    if (strcmp(next, "best") == 0) type = SRC_SINC_BEST_QUALITY;
-    else if (strcmp(next, "medium") == 0) type = SRC_SINC_MEDIUM_QUALITY;
-    else if (strcmp(next, "fast") == 0) type = SRC_SINC_FASTEST;
-    else if (strcmp(next, "zero") == 0) type = SRC_ZERO_ORDER_HOLD;
-    else if (strcmp(next, "linear") == 0) type = SRC_LINEAR;
-    else {
-      fprintf(stderr, "Wrong resampler type value.\n");
-      return 0;
+  if (strcmp(opt, "resamp-quality") == 0 && next) {
+    long size;
+    if (parse_int(next, &size) && frames > 1 && frames < 1e6) {
+      data->resamp_quality = size;
+      return 2;
     }
-    data->converter_type = type;
-    return 2;
+    fprintf(stderr, "Wrong resamp quality size value.\n");
+    return 0;
+  }
+
+  if (strcmp(opt, "resamp-squality") == 0 && next) {
+    long size;
+    if (parse_int(next, &size) && frames > 1 && frames < 1e6) {
+      data->resamp_squality = size;
+      return 2;
+    }
+    fprintf(stderr, "Wrong resamp squality value.\n");
+    return 0;
   }
 
   if (strcmp(opt, "name") == 0 && next) {

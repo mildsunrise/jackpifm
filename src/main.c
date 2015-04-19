@@ -11,8 +11,7 @@
 #include "stereo.h"
 #include "rds.h"
 #include "outputter.h"
-
-#include <samplerate.h>
+#include "resamp.h"
 
 
 // Following is a graph of the flow the samples follow
@@ -101,9 +100,8 @@ static jackpifm_preemp_t **preemp;
 static jackpifm_stereo_t *stereo;
 static const uint8_t *rds_data;
 static jackpifm_rds_t *rds;
-static SRC_STATE *resampler;
-static SRC_DATA resampler_data;
-static jackpifm_sample_t *ibuffer;
+static jackpifm_resamp_t *resampler [2];
+static jackpifm_sample_t *resampler_buffer [2];
 static jackpifm_sample_t *obuffer;
 static jackpifm_sample_t *ringbuffer; // [mutex]
 static volatile bool thread_started; // [mutex]
@@ -126,32 +124,41 @@ int process_callback(jack_nframes_t nframes, void *arg) {
   if (stereo) {
     jackpifm_sample_t *left = jack_port_get_buffer(jack_ports[0], jperiod);
     jackpifm_sample_t *right = jack_port_get_buffer(jack_ports[1], jperiod);
+    out_period = jperiod;
 
     if (preemp) {
-      jackpifm_preemp_process(preemp[0], left, jperiod);
-      jackpifm_preemp_process(preemp[1], right, jperiod);
+      jackpifm_preemp_process(preemp[0], left, out_period);
+      jackpifm_preemp_process(preemp[1], right, out_period);
     }
 
     // We assume resampling is enabled
-    //TODO
-    out = ibuffer;
-    out_period = resampler_data.output_frames_gen;
+    size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], left, out_period);
+    size_t result_b = jackpifm_resamp_process(resampler[1], resampler_buffer[1], right, out_period);
+    // Since both resamplers are fed the same number
+    // of samples at the same time, it's safe to assume
+    // they always return the same number of samples.
+    assert(result == result_b);
+    out_period = result;
 
-    jackpifm_stereo_process(stereo, out, out, out + out_period, out_period);
+    jackpifm_stereo_process(stereo, resampler_buffer[0], left, right, out_period);
+    out = resampler_buffer[0];
   } else {
-    out = jack_port_get_buffer(jack_ports[0], jperiod);
+    out = jack_port_get_buffer(jack_ports[0], jperiod); //FIXME is it safe to work over that buffer?
     out_period = jperiod;
 
     if (preemp)
       jackpifm_preemp_process(preemp[0], out, out_period);
 
     if (resampler) {
-      //TODO
+      size_t result = jackpifm_resamp_process(resampler[0], resampler_buffer[0], out, out_period);
+      out = resampler_buffer[0];
+      out_period = result;
     }
   }
 
   // Apply RDS encoding (if needed)
   if (rds)
+    // We assume resampling is enabled
     jackpifm_rds_process(rds, out, out_period);
 
 
@@ -323,20 +330,13 @@ void start_client(const client_options *opt) {
   // Setup resampler
   int error, channels = opt->stereo ? 2 : 1;
   if (opt->resample) {
-    resampler = src_new(opt->converter_type, channels, &error);
-    assert(resampler);
-    assert(sizeof(jackpifm_sample_t) == sizeof(float));
-
-    resampler_data.end_of_input = 0;
-    resampler_data.src_ratio = rate / (double)jrate;
-
-    resampler_data.input_frames = jperiod;
-    resampler_data.data_in = jackpifm_calloc(channels * jperiod, sizeof(jackpifm_sample_t));
-
-    resampler_data.output_frames = (int)(1.02 * jperiod * resampler_data.src_ratio);
-    resampler_data.data_out = jackpifm_calloc(channels * resampler_data.output_frames, sizeof(jackpifm_sample_t));
-    ibuffer = jackpifm_calloc(channels * resampler_data.output_frames, sizeof(jackpifm_sample_t));
-  } else resampler = NULL;
+    double ratio = jrate / (float)rate;
+    size_t iperiod = (int)(1.02 * jperiod / ratio);
+    for (size_t i = 0; i < channels; i++) {
+      resampler[i] = jackpifm_resamp_new(jrate / (float)rate, opt->resamp_quality, opt->resamp_squality);
+      resampler_buffer[i] = jackpifm_calloc(channels * iperiod, sizeof(jackpifm_sample_t));
+    }
+  } else resampler[0] = NULL;
 
   // Create ringbuffer
   ringsize = opt->ringsize;
@@ -449,11 +449,11 @@ void stop_client() {
 
   // Free everything
   int channels = stereo ? 2 : 1;
-  if (resampler) {
-    free(resampler_data.data_in);
-    free(resampler_data.data_out);
-    free(ibuffer);
-    src_delete(resampler);
+  if (resampler[0]) {
+    for (size_t i = 0; i < channels; i++) {
+      free(resampler_buffers[i]);
+      jackpifm_resamp_free(resampler[i]);
+    }
   }
 
   free(ringbuffer);

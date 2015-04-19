@@ -6,6 +6,7 @@ JACKPIFM_SRC=\
 	src/outputter.o \
 	src/preemp.o \
 	src/rds.o \
+	src/resamp.o \
 	src/stereo.o \
 	\
 	src/main.o
