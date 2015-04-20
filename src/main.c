@@ -138,6 +138,8 @@ int process_callback(jack_nframes_t nframes, void *arg) {
     // of samples at the same time, it's safe to assume
     // they always return the same number of samples.
     assert(result == result_b);
+    left = resampler_buffer[0];
+    right = resampler_buffer[1];
     iperiod = result;
 
     jackpifm_stereo_process(stereo, resampler_buffer[0], left, right, iperiod);
@@ -279,20 +281,21 @@ void read_file(const char *name, uint8_t **file_data, size_t *file_size) {
     abort();
   }
 
-  size_t asize = 64;
-  uint8_t *data = jackpifm_malloc(asize);
-  size_t size = 0;
+  size_t asize = 0, size = 0;
+  uint8_t *data = NULL;
   while (!feof(file)) {
-    size += fread(data + size, 1, 64, file);
-    assert(!ferror(file));
     if (size + 64 > asize) {
       asize += 64;
       data = jackpifm_realloc(data, asize);
     }
+    size += fread(data + size, 1, 64, file);
+    assert(!ferror(file));
   }
 
   r = fclose(file);
   assert(!r);
+  *file_data = data;
+  *file_size = size;
 }
 
 void connect_jack_port(jack_client_t *client, jack_port_t *port, const char *name) {

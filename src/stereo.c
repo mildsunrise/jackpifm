@@ -19,10 +19,11 @@ jackpifm_stereo_t *jackpifm_stereo_new() {
 
 void jackpifm_stereo_process(jackpifm_stereo_t *filter, jackpifm_sample_t *data, const jackpifm_sample_t *left, const jackpifm_sample_t *right, size_t size) {
   int state = filter->state;
+  double *sin = filter->sin;
 
   for (size_t i = 0; i < size; i++) {
-    data[i] = (left[i]+right[i]) + (left[i]-right[i])*filter->sin[state*2];
-    data[i] = 0.9 * data[i]/2  +  0.1 * filter->sin[state];
+    jackpifm_sample_t med = (left[i]+right[i]) + (left[i]-right[i])*sin[state*2];
+    data[i] = 0.9 * med/2  +  0.1 * sin[state];
     state = (state+1) % 8;
   }
 
