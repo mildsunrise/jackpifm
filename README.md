@@ -26,7 +26,7 @@ and `jackpifm` will connect to it, or you can connect ports manually, you
 know.
 
 **Warning:** Don't start this program while sound is being played through
-the builtin soundcard, or viceversa. This will render both unusable until
+the builtin soundcard, or vice versa. This will render both unusable until
 the next reboot.
 
 Have fun! It's still recommended to read the rest of this README.
@@ -44,7 +44,7 @@ and / or glitches. This is called the calibration phase. After that, reflows wil
 be less than 0.1%, which is too small to be heard.
 
 The program will print a line each time a reflow is done, indicating the adjustment
-factor each time, as well as the latency (more on that later). It'll print a message
+factor each time, as well as the latency (more on that below). It'll print a message
 when the calibration phase ends; the emission should then be stable.
 
 ### Latency
@@ -67,7 +67,7 @@ occasional errors (i.e. one every two minutes).
 
 **Protip 3:** Another way to reduce glitches and errors is to reflow more frequently;
 you can do this by decreasing the `-t` option. This will cause bigger pitch changes
-but I'll doubt they'll be audible then.
+but I'll doubt they'll become audible.
 
 
 ## Resampling
@@ -76,8 +76,9 @@ If `-r` is enabled, `jackpifm` will resample all sound from JACK into 152kHz bef
 emitting it. This means a bit more load on the CPU and GPIO, and translates into
 **distorsion** in FM except when absolute silence is being emitted.
 
-On the other hand, it means lower latency and latency changes, less pitch changes
-and it's needed if you want to enable Stereo or RDS (see below).
+On the other hand, it means lower latency and latency changes, and less pitch changes.
+
+It's required if you want to enable Stereo or RDS (see below).
 
 
 ## Stereo
@@ -94,7 +95,7 @@ If you enable `--stereo` you may pass two ports (left and right) instead of one.
 
 ## RDS
 
-RDS allows a radio station to embed a little bitstream into the emitted FM.
+[RDS][] allows a radio station to embed a little bitstream into the emitted FM.
 The stream contains data about station name, currently playing program, genre,
 and notifications.
 
@@ -106,6 +107,13 @@ the blob file through the option `-R`. To emit the example RDS blob, you'd do:
 If you want to generate your own blob, you can use [rds-utils][].
 
 **Note:** I haven't verified the feature works in this version.
+
+
+## Other options
+
+There are other options not explained here, that allow you to disable the
+pre-emphasis built-in filter, change the JACK client name, change resampling
+quality and more. Look at the help message and / or the code.
 
 
 ## Emission details
