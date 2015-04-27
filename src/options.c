@@ -242,7 +242,7 @@ static int parse_short_option(char opt, char *next, void *opaque) {
 
   if (opt == 'l' && next) {
     double latency_target;
-    if (parse_float(next, &freq) && latency_target >= 0 && latency_target <= 2) {
+    if (parse_float(next, &latency_target) && latency_target >= 0 && latency_target <= 2) {
       data->latency_target = latency_target;
       return 2;
     }
@@ -336,7 +336,7 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
 
   if (strcmp(opt, "latency-target") == 0 && next) {
     double latency_target;
-    if (parse_float(next, &freq) && latency_target >= 0 && latency_target <= 2) {
+    if (parse_float(next, &latency_target) && latency_target >= 0 && latency_target <= 2) {
       data->latency_target = latency_target;
       return 2;
     }

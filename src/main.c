@@ -120,10 +120,10 @@ void *output_thread(void *arg);
 inline void crop_sample(jackpifm_sample_t *sample, size_t *cropped) {
   if (*sample < -1) {
     *sample = -1;
-    *cropped++;
+    (*cropped)++;
   } else if (*sample > +1) {
     *sample = +1;
-    *cropped++;
+    (*cropped)++;
   }
 }
 
@@ -132,7 +132,7 @@ inline void crop_sample(jackpifm_sample_t *sample, size_t *cropped) {
 int process_callback(jack_nframes_t nframes, void *arg) {
   jackpifm_sample_t *ibuffer;
   size_t iperiod;
-  size_t cropped_now;
+  size_t cropped_now = 0;
 
   // Preemp, resample and stereo modulate
   if (stereo) {
@@ -141,8 +141,8 @@ int process_callback(jack_nframes_t nframes, void *arg) {
     iperiod = jperiod;
 
     for (size_t i = 0; i < iperiod; i++) {
-      crop_sample(left + i, &cropped);
-      crop_sample(right + i, &cropped);
+      crop_sample(left + i, &cropped_now);
+      crop_sample(right + i, &cropped_now);
     }
 
     if (preemp) {
@@ -168,7 +168,7 @@ int process_callback(jack_nframes_t nframes, void *arg) {
     iperiod = jperiod;
 
     for (size_t i = 0; i < iperiod; i++)
-      crop_sample(ibuffer + i, &cropped);
+      crop_sample(ibuffer + i, &cropped_now);
 
     if (preemp)
       jackpifm_preemp_process(preemp[0], ibuffer, iperiod);
