@@ -15,7 +15,7 @@
 
 
 // Following is a graph of the flow the samples follow
-// to get from JACK to the GPIO:
+// to get from JACK to the GPIO (filters not shown):
 //
 //
 //                           |iwritten        |owritten
