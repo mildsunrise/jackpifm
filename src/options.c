@@ -95,6 +95,7 @@ typedef struct {
 
   // Reflow
   int reflow_time;
+  double latency_target;
   int calibration_reflows;
 
   // Resampling
@@ -123,6 +124,7 @@ static const client_options default_values = {
 
   // Reflow options
   40,    // reflow time
+  0.25,  // latency target
   5,     // calibration reflows
 
   // Resampling
@@ -163,6 +165,7 @@ static void print_help(const char *basename) {
   // Reflow options
   printf("Reflow options:\n");
   print_option('t', "reflow-time=T", "Time between reflows, in seconds. [default: 40]");
+  print_option('l', "latency-target=N", "Latency targetting coefficient. [default: 0.25]");
   print_option(  0, "calibration-reflows=N", "Number of reflows in the calibration phase. [default: 5]");
   printf("\n");
 
@@ -234,6 +237,16 @@ static int parse_short_option(char opt, char *next, void *opaque) {
       return 2;
     }
     fprintf(stderr, "Wrong reflow time value.\n");
+    return 0;
+  }
+
+  if (opt == 'l' && next) {
+    double latency_target;
+    if (parse_float(next, &freq) && latency_target >= 0 && latency_target <= 2) {
+      data->latency_target = latency_target;
+      return 2;
+    }
+    fprintf(stderr, "Wrong latency target value.\n");
     return 0;
   }
 
@@ -318,6 +331,16 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
       return 2;
     }
     fprintf(stderr, "Wrong reflow time value.\n");
+    return 0;
+  }
+
+  if (strcmp(opt, "latency-target") == 0 && next) {
+    double latency_target;
+    if (parse_float(next, &freq) && latency_target >= 0 && latency_target <= 2) {
+      data->latency_target = latency_target;
+      return 2;
+    }
+    fprintf(stderr, "Wrong latency target value.\n");
     return 0;
   }
 

@@ -91,6 +91,7 @@ static volatile size_t opos;       // Output position inside the ring buffer (i.
 static volatile double srate;      // Rate at which we last setup the GPIO. [mutex]
 static volatile double orate;      // Real rate at which we write from the ringbuffer, to the GPIO. [mutex]
 static volatile uint32_t cropped;  // Count of samples that were cropped since last reflow. [mutex]
+static double latency_target;
 
 // Other parameters
 static jack_client_t *jack_client;
@@ -355,6 +356,7 @@ void start_client(const client_options *opt) {
   }
 
   delay = opt->ringsize / 2;
+  latency_target = opt->latency_target;
   calibrated = false;
   cropped = 0;
 
@@ -526,7 +528,7 @@ void reflow(unsigned int next_reflow) {
   printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %d frames (%6.2fms).\n", orate, (orate-rate)*100.0/rate, new_rate, distance-delay, (distance-(double)delay)*1000 / rate);
 
   srate = new_rate;
-  new_rate += .25 * (distance - (double)delay) / next_reflow;
+  new_rate += latency_target * (distance - (double)delay) / next_reflow;
   jackpifm_outputter_setup(new_rate, operiod);
   iwritten = owritten = 0;
 
