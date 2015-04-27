@@ -90,6 +90,7 @@ static volatile size_t ipos;       // Input position inside the ring buffer (i.e
 static volatile size_t opos;       // Output position inside the ring buffer (i.e. where to read next). [mutex]
 static volatile double srate;      // Rate at which we last setup the GPIO. [mutex]
 static volatile double orate;      // Real rate at which we write from the ringbuffer, to the GPIO. [mutex]
+static volatile uint32_t cropped;  // Count of samples that were cropped since last reflow. [mutex]
 
 // Other parameters
 static jack_client_t *jack_client;
@@ -114,17 +115,34 @@ static volatile bool calibrated; // [mutex]
 
 void *output_thread(void *arg);
 
+// Utility method
+inline void crop_sample(jackpifm_sample_t *sample, size_t *cropped) {
+  if (*sample < -1) {
+    *sample = -1;
+    *cropped++;
+  } else if (*sample > +1) {
+    *sample = +1;
+    *cropped++;
+  }
+}
+
 // The main "process" callback. We receive samples from Jack,
 // preprocess them and write them to the ringbuffer.
 int process_callback(jack_nframes_t nframes, void *arg) {
   jackpifm_sample_t *ibuffer;
   size_t iperiod;
+  size_t cropped_now;
 
   // Preemp, resample and stereo modulate
   if (stereo) {
     jackpifm_sample_t *left = jack_port_get_buffer(jack_ports[0], jperiod);
     jackpifm_sample_t *right = jack_port_get_buffer(jack_ports[1], jperiod);
     iperiod = jperiod;
+
+    for (size_t i = 0; i < iperiod; i++) {
+      crop_sample(left + i, &cropped);
+      crop_sample(right + i, &cropped);
+    }
 
     if (preemp) {
       jackpifm_preemp_process(preemp[0], left, iperiod);
@@ -147,6 +165,9 @@ int process_callback(jack_nframes_t nframes, void *arg) {
   } else {
     ibuffer = jack_port_get_buffer(jack_ports[0], jperiod);
     iperiod = jperiod;
+
+    for (size_t i = 0; i < iperiod; i++)
+      crop_sample(ibuffer + i, &cropped);
 
     if (preemp)
       jackpifm_preemp_process(preemp[0], ibuffer, iperiod);
@@ -192,6 +213,7 @@ int process_callback(jack_nframes_t nframes, void *arg) {
   }
 
   iwritten += iperiod;
+  cropped += cropped_now;
   pthread_mutex_unlock(&mutex);
 
   return 0;
@@ -334,6 +356,7 @@ void start_client(const client_options *opt) {
 
   delay = opt->ringsize / 2;
   calibrated = false;
+  cropped = 0;
 
   // Setup resampler
   int channels = opt->stereo ? 2 : 1;
@@ -506,6 +529,11 @@ void reflow(unsigned int next_reflow) {
   new_rate += .25 * (distance - (double)delay) / next_reflow;
   jackpifm_outputter_setup(new_rate, operiod);
   iwritten = owritten = 0;
+
+  if (cropped) {
+    fprintf(stderr, "Warning: %u samples were cropped!\n", cropped);
+    cropped = 0;
+  }
 
   pthread_mutex_unlock(&mutex);
 }
