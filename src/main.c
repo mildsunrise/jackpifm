@@ -223,19 +223,17 @@ int sample_rate_callback(jack_nframes_t nframes, void *arg) {
   return 0;
 }
 
-void set_port_latency(jack_port_t *port, jack_nframes_t min, jack_nframes_t max) {
+void set_port_latency(jack_port_t *port) {
   jack_latency_range_t range;
-  jack_port_get_latency_range(port, JackPlaybackLatency, &range);
-  range.min += min;
-  range.max += max;
+  range.min = range.max = tar_lat;
   jack_port_set_latency_range(port, JackPlaybackLatency, &range);
 }
 void latency_callback(jack_latency_callback_mode_t mode, void *arg) {
   if (mode != JackPlaybackLatency) return;
 
-  set_port_latency(jack_ports[0], min_lat, max_lat);
+  set_port_latency(jack_ports[0]);
   if (stereo)
-    set_port_latency(jack_ports[1], min_lat, max_lat);
+    set_port_latency(jack_ports[1]);
 }
 
 
