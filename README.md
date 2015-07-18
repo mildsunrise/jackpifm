@@ -1,4 +1,4 @@
-# jackpifm v2
+# jackpifm v3
 
 This is a little program that runs on your Raspberry Pi, reads live audio from [JACK][] and
 broadcasts it over [FM][] through the GPIO pin 7 ([GPIO #4][gpio]). If you add
