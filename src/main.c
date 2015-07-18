@@ -437,9 +437,9 @@ void start_client(const client_options *opt) {
   signal(SIGINT, signal_handler);
 
   // ACTIVATE!!!
+  printf("\n");
   ret = jack_activate(jack_client);
   assert(!ret);
-  printf("\n");
 
   // Connect ports
   connect_jack_port(jack_client, jack_ports[0], opt->target_ports[0]);

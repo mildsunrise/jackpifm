@@ -111,7 +111,8 @@ double jackpifm_controller_process(jackpifm_controller_t *ctr, size_t delay) {
   else if (resample_factor > ctr->max_resample_factor) resample_factor = ctr->max_resample_factor;
 
   /* Calculate resample_mean so we can init ourselves to saner values. */
-  ctr->resample_mean = 0.9999 * ctr->resample_mean + 0.0001 * resa
+  ctr->resample_mean = 0.9999 * ctr->resample_mean + 0.0001 * resample_factor;
+
   return resample_factor;
 }
 
