@@ -412,7 +412,6 @@ void start_client(const client_options *opt) {
   printf("Info: minimum latency is %u frames (%.2fms)\n", min_lat, min_lat*1000 / (double)jrate);
   printf("Info: target latency is %u frames (%.2fms)\n", tar_lat, tar_lat*1000 / (double)jrate);
   printf("Info: maximum latency is %u frames (%.2fms)\n", max_lat, max_lat*1000 / (double)jrate);
-  min_lat = max_lat = tar_lat; // FIXME remove this
 
   // Set JACK callbacks
   jack_set_process_callback(jack_client, process_callback, NULL);
