@@ -396,13 +396,13 @@ void start_client(const client_options *opt) {
     assert(jack_ports[0]);
   }
 
-  // Calculate latency // FIXME: Take that 4 out
+  // Calculate latency
   // Minimum latency is (GPIO latency)
-  min_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4);
+  min_lat = (JACKPIFM_BUFFERSAMPLES);
   // Target latency is (GPIO latency + delay)
-  tar_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + delay;
+  tar_lat = (JACKPIFM_BUFFERSAMPLES) + delay;
   // Maximum latency is (GPIO latency + ringsize)
-  max_lat = (JACKPIFM_BUFFERINSTRUCTIONS / 4) + ringsize;
+  max_lat = (JACKPIFM_BUFFERSAMPLES) + ringsize;
 
   // Convert min, tar and max into JACK time samples
   min_lat = roundf(min_lat * jrate / (float)rate);
