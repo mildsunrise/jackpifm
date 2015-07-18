@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <math.h>
 
+#include "controller.h"
 #include "preemp.h"
 #include "stereo.h"
 #include "rds.h"
@@ -94,6 +95,7 @@ static jackpifm_resamp_t *resampler [2];
 static jackpifm_sample_t *resampler_buffer [2];
 static jackpifm_sample_t *obuffer;
 static jackpifm_sample_t *ringbuffer; // [mutex]
+static jackpifm_controller_t *controller;
 static volatile bool thread_started; // [mutex]
 static volatile bool thread_running; // [mutex]
 
@@ -251,7 +253,8 @@ void *output_thread(void *arg) {
       break;
     }
 
-    if ((ringsize + ipos - opos) % ringsize >= operiod) {
+    size_t current_delay = (ringsize + ipos - opos) % ringsize;
+    if (current_delay >= operiod) {
       // Read from the ringbuffer
       if (opos + operiod > ringsize) {
         size_t delta = ringsize - opos;
@@ -266,6 +269,8 @@ void *output_thread(void *arg) {
 
     pthread_mutex_unlock(&mutex);
 
+    double coefficient = jackpifm_controller_process(controller, current_delay);
+    jackpifm_outputter_setup(rate / coefficient, operiod);
     jackpifm_outputter_output(obuffer, operiod);
   }
 
@@ -424,6 +429,9 @@ void start_client(const client_options *opt) {
   jackpifm_outputter_setup(rate, operiod);
   printf("Info: carrier frequency %.2f MHz, rate %u Hz, period %u frames.\n", opt->frequency, rate, operiod);
 
+  // Create controller
+  controller = jackpifm_controller_new(1, delay, 256, 100000, 10000, 15.0, 10000.0, 1*2.0, 1/2.0);
+
   // Subscribe signal handlers
   atexit(stop_client);
   signal(SIGQUIT, signal_handler);
@@ -480,6 +488,8 @@ void stop_client() {
   jackpifm_stereo_free(stereo);
   jackpifm_rds_free(rds);
   free((uint8_t *)rds_data);
+
+  jackpifm_controller_free(controller);
 
   // Unsetup FM
   jackpifm_unsetup_dma();

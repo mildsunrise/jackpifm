@@ -3,6 +3,7 @@ LDFLAGS = -pthread -lm -lrt $(shell pkg-config --libs jack samplerate)
 PREFIX = /usr/local
 
 JACKPIFM_SRC=\
+	src/controller.o \
 	src/outputter.o \
 	src/preemp.o \
 	src/rds.o \
