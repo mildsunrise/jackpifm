@@ -93,11 +93,6 @@ typedef struct {
   const char *rds_file;
   bool preemp;
 
-  // Reflow
-  int reflow_time;
-  double latency_target;
-  int calibration_reflows;
-
   // Resampling
   bool resample;
   size_t period_size;
@@ -121,11 +116,6 @@ static const client_options default_values = {
   false, // stereo
   NULL,  // RDS blob file
   true,  // preemp
-
-  // Reflow options
-  40,    // reflow time
-  0.25,  // latency target
-  5,     // calibration reflows
 
   // Resampling
   false, // resamp
@@ -160,13 +150,6 @@ static void print_help(const char *basename) {
   print_option('s', "stereo", "Enable stereo emission.");
   print_option('R', "rds=FILE", "Encode an RDS blob with the stream.");
   print_option('e', "no-preemp", "Disable the pre-emphasis filter.");
-  printf("\n");
-
-  // Reflow options
-  printf("Reflow options:\n");
-  print_option('t', "reflow-time=T", "Time between reflows, in seconds. [default: 40]");
-  print_option('l', "latency-target=N", "Latency targetting coefficient. [default: 0.25]");
-  print_option(  0, "calibration-reflows=N", "Number of reflows in the calibration phase. [default: 5]");
   printf("\n");
 
   // Sampling options
@@ -228,26 +211,6 @@ static int parse_short_option(char opt, char *next, void *opaque) {
   if (opt == 'e') {
     data->preemp = false;
     return 1;
-  }
-
-  if (opt == 't' && next) {
-    long time;
-    if (parse_int(next, &time) && time > 0 && time < 1e6) {
-      data->reflow_time = time;
-      return 2;
-    }
-    fprintf(stderr, "Wrong reflow time value.\n");
-    return 0;
-  }
-
-  if (opt == 'l' && next) {
-    double latency_target;
-    if (parse_float(next, &latency_target) && latency_target >= 0 && latency_target <= 2) {
-      data->latency_target = latency_target;
-      return 2;
-    }
-    fprintf(stderr, "Wrong latency target value.\n");
-    return 0;
   }
 
   if (opt == 'r') {
@@ -322,36 +285,6 @@ static int parse_long_option(char *opt, char *next, void *opaque) {
   if (strcmp(opt, "no-preemp") == 0) {
     data->preemp = false;
     return 1;
-  }
-
-  if (strcmp(opt, "reflow-time") == 0 && next) {
-    long time;
-    if (parse_int(next, &time) && time > 0 && time < 1e6) {
-      data->reflow_time = time;
-      return 2;
-    }
-    fprintf(stderr, "Wrong reflow time value.\n");
-    return 0;
-  }
-
-  if (strcmp(opt, "latency-target") == 0 && next) {
-    double latency_target;
-    if (parse_float(next, &latency_target) && latency_target >= 0 && latency_target <= 2) {
-      data->latency_target = latency_target;
-      return 2;
-    }
-    fprintf(stderr, "Wrong latency target value.\n");
-    return 0;
-  }
-
-  if (strcmp(opt, "calibration-reflows") == 0 && next) {
-    long count;
-    if (parse_int(next, &count) && count >= 0 && count < 1e6) {
-      data->calibration_reflows = count;
-      return 2;
-    }
-    fprintf(stderr, "Wrong calibration reflow count value.\n");
-    return 0;
   }
 
   if (strcmp(opt, "resamp") == 0) {

@@ -18,7 +18,7 @@
 // to get from JACK to the GPIO (filters not shown):
 //
 //
-//                           |iwritten        |owritten
+//                           |ipos            |opos
 //                           |                |
 // +------+   +------------+ | +------------+ | +------+
 // | JACK |==>| RESAMPLING |==>| RINGBUFFER |==>| GPIO |
@@ -31,8 +31,8 @@
 //
 //
 // `jperiod` and `operiod` are fixed parameters.
-// `jrate` and `rate` are theorical, or target, sample rates.
-// `iwritten` and `owritten` are real measures.
+// `jrate` and `rate` are theoretical, or target, sample rates.
+// `ipos` and `opos` track the tail and head of the ringbuffer.
 //
 // A more precise explanation follows.
 //
@@ -44,13 +44,13 @@
 //    a fixed ratio (rate/jrate), so that the new samples come in
 //    theorical rate `rate` (the little desync from JACK is inherited).
 //
-// 3. The new samples are written to the ringbuffer, and `iwritten`
+// 3. The new samples are written to the ringbuffer, and `ipos`
 //    incremented accordingly. If the ringbuffer is full, the samples
 //    are dropped instead and a message printed.
 //
 // 4. At the same time, another thread is constantly reading samples
-//    from the ringbuffer, in groups of `operiod` samples, and incrementing
-//    `owritten`.
+//    from the ringbuffer, in groups of `operiod` samples, and updating
+//    `opos`.
 //
 //    This thread reads samples at the pace of the GPIO controller, which
 //    *should* be equal to `rate`, but again there's a bit of desync.
@@ -64,13 +64,7 @@
 //    or slower, so that there's on average `delay` samples of difference
 //    between what is written to the ringbuffer, and what is read from it.
 //
-//  - In order to accomplish this, when the thread detects that
-//    `ìwritten - owritten` exceeds `reflow` samples, it calculates `irate`
-//    and `orate` by taking the deltas and calculates a correction.
-//
-//  - This correction is applied to the GPIO in the hope that it'll read
-//    "in sync" with samples pushed to the ringbuffer, and will
-//    approximate `rate` as much as possible.
+// This last step is done through a custom PI controller.
 
 
 // Integer parameters (measures in samples)
@@ -78,20 +72,14 @@ static size_t ringsize; // Size of the ring buffer.
 static size_t jperiod;  // Period size at which we receive from JACK.
 static size_t operiod;  // Period size at which we read from the ringbuffer.
 static size_t jrate;    // "Theoretical" rate at which we read from JACK.
-static size_t rate;     // "Theoretical" target rate, which jrate and orate should approximate.
+static size_t rate;     // "Theoretical" target rate at which we write to the GPIO.
 static size_t delay;    // Initial/target delay between writing and reading to ringbuffer.
 static size_t min_lat;  // Minimum latency in JACK frames, from reading from JACK until emitting over FM.
 static size_t tar_lat;  // Target latency in JACK frames, from reading from JACK until emitting over FM, which we try to approximate.
 static size_t max_lat;  // Maximum latency in JACK frames, from reading from JACK until emitting over FM.
 
-static volatile uint64_t iwritten; // Counts samples we attempted to write to ringbuffer, from JACK. [mutex]
-static volatile uint64_t owritten; // Counts samples we attempted to write from the ringbuffer, to GPIO. [mutex]
 static volatile size_t ipos;       // Input position inside the ring buffer (i.e. where to write next). [mutex]
 static volatile size_t opos;       // Output position inside the ring buffer (i.e. where to read next). [mutex]
-static volatile double srate;      // Rate at which we last setup the GPIO. [mutex]
-static volatile double orate;      // Real rate at which we write from the ringbuffer, to the GPIO. [mutex]
-static volatile uint32_t cropped;  // Count of samples that were cropped since last reflow. [mutex]
-static double latency_target;
 
 // Other parameters
 static jack_client_t *jack_client;
@@ -108,7 +96,6 @@ static jackpifm_sample_t *obuffer;
 static jackpifm_sample_t *ringbuffer; // [mutex]
 static volatile bool thread_started; // [mutex]
 static volatile bool thread_running; // [mutex]
-static volatile bool calibrated; // [mutex]
 
 
 // JACK CALLBACKS
@@ -210,11 +197,10 @@ int process_callback(jack_nframes_t nframes, void *arg) {
       thread_started = true;
     }
   } else {
-    if (calibrated) fprintf(stderr, "Got too many frames from JACK, dropping :(\n");
+    fprintf(stderr, "Got too many frames from JACK, dropping :(\n");
   }
 
-  iwritten += iperiod;
-  cropped += cropped_now;
+  if (cropped_now) fprintf(stderr, "Cropped %u samples.\n", cropped_now);
   pthread_mutex_unlock(&mutex);
 
   return 0;
@@ -275,10 +261,9 @@ void *output_thread(void *arg) {
 
       opos = (opos + operiod) % ringsize;
     } else {
-      if (calibrated) fprintf(stderr, "The buffer got empty, delaying! :(\n");
+      fprintf(stderr, "The buffer got empty, delaying! :(\n");
     }
 
-    owritten += operiod;
     pthread_mutex_unlock(&mutex);
 
     jackpifm_outputter_output(obuffer, operiod);
@@ -341,14 +326,11 @@ void start_client(const client_options *opt) {
   printf("Info: registered as '%s'\n", jack_get_client_name(jack_client));
 
   // Set parameters
-  iwritten = owritten = 0;
-
   jperiod = jack_get_buffer_size(jack_client);
   operiod = opt->period_size;
 
   jrate = jack_get_sample_rate(jack_client);
   rate = opt->resample ? 152000 : jrate;
-  srate = rate;
 
   if (opt->ringsize < 3*jperiod*rate/jrate) {
     fprintf(stderr, "Ringbuffer has to be at least 3x the real period size (%d).\n", jperiod*rate/jrate);
@@ -356,9 +338,6 @@ void start_client(const client_options *opt) {
   }
 
   delay = opt->ringsize / 2;
-  latency_target = opt->latency_target;
-  calibrated = false;
-  cropped = 0;
 
   // Setup resampler
   int channels = opt->stereo ? 2 : 1;
@@ -442,8 +421,8 @@ void start_client(const client_options *opt) {
   ret = jackpifm_setup_fm();
   assert(!ret);
   jackpifm_setup_dma(opt->frequency);
-  jackpifm_outputter_setup(srate, operiod);
-  printf("Info: carrier frequency %.2f MHz, rate %.3f Hz, period %u frames.\n", opt->frequency, srate, operiod);
+  jackpifm_outputter_setup(rate, operiod);
+  printf("Info: carrier frequency %.2f MHz, rate %u Hz, period %u frames.\n", opt->frequency, rate, operiod);
 
   // Subscribe signal handlers
   atexit(stop_client);
@@ -515,57 +494,11 @@ void signal_handler(int sig) {
   exit(0);
 }
 
-
-// MAIN LOGIC
-// ----------
-
-void reflow(unsigned int next_reflow) {
-  pthread_mutex_lock(&mutex);
-
-  size_t distance = (ringsize + ipos - opos) % ringsize;
-  orate = rate * ((double)owritten / (double)iwritten);
-  double new_rate = srate + (rate - orate) / 2;
-  printf("Reflow: real %.3f Hz (%+6.3f%%), setting %.3f Hz. Deviation: %d frames (%6.2fms).\n", orate, (orate-rate)*100.0/rate, new_rate, distance-delay, (distance-(double)delay)*1000 / rate);
-
-  srate = new_rate;
-  new_rate += latency_target * (distance - (double)delay) / next_reflow;
-  jackpifm_outputter_setup(new_rate, operiod);
-  iwritten = owritten = 0;
-
-  if (cropped) {
-    fprintf(stderr, "Warning: %u samples were cropped!\n", cropped);
-    cropped = 0;
-  }
-
-  pthread_mutex_unlock(&mutex);
-}
-
 int main(int argc, char **argv) {
   client_options options;
   parse_jackpifm_options(&options, argc, argv);
 
   start_client(&options);
 
-  // Do calibration reflows
-  if (options.calibration_reflows > 0) {
-    printf("Starting calibration stage (duration %d * %d sec)...\n", options.calibration_reflows, options.reflow_time);
-    sleep(5);
-    for (int i = 0; i < options.calibration_reflows; i++) {
-      reflow(options.reflow_time);
-      sleep(options.reflow_time);
-    }
-  }
-
-  // Keep reflowing until end
-  printf("Calibration stage finished.\n");
-  pthread_mutex_lock(&mutex);
-  calibrated = true;
-  pthread_mutex_unlock(&mutex);
-
-  while (1) {
-    reflow(options.reflow_time);
-    sleep(options.reflow_time);
-  }
-
-  return 0;
+  while (1) sleep(600);
 }
