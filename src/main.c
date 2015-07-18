@@ -335,8 +335,8 @@ void start_client(const client_options *opt) {
   jrate = jack_get_sample_rate(jack_client);
   rate = opt->resample ? 152000 : jrate;
 
-  if (opt->ringsize < 3*jperiod*rate/jrate) {
-    fprintf(stderr, "Ringbuffer has to be at least 3x the real period size (%d).\n", jperiod*rate/jrate);
+  if (opt->ringsize < 2*jperiod*rate/jrate) {
+    fprintf(stderr, "Ringbuffer has to be at least 2x the real period size (%d).\n", jperiod*rate/jrate);
     abort();
   }
 
