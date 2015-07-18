@@ -161,7 +161,6 @@ void jackpifm_outputter_sync() {
 void jackpifm_outputter_output(const jackpifm_sample_t *data, size_t size) {
   for (size_t i = 0; i < size; i++) {
     float value = data[i];
-    assert(value >= -1 && value <= +1);
     value *= 8;          // modulation index (AKA volume!)
     value += fracerror;  // error that couldn't be encoded from last time.
 
