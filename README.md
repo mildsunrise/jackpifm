@@ -34,18 +34,15 @@ Have fun! It's still recommended to read the rest of this README.
 
 ## Synchronization
 
-With the new version, we use a ringbuffer and a reflow (feedback) system to acommodate
+With the new version, we use a ringbuffer and a PI controller to acommodate
 desynchronization between JACK and the GPIO. We do this by changing the rate at which
-GPIO accepts frames. **This translates in tiny pitch changes in the emission every
-40 seconds** (by default).
+GPIO accepts frames. **This translates in constant, tiny pitch changes in the
+emission.**
 
-During the first reflows, the pitch changes will be significant and there will be drops
-and / or glitches. This is called the calibration phase. After that, reflows will often
-be less than 0.1%, which is too small to be heard.
-
-The program will print a line each time a reflow is done, indicating the adjustment
-factor each time, as well as the latency (more on that below). It'll print a message
-when the calibration phase ends; the emission should then be stable.
+After firing `jackpifm` you'll see some errors; this is normal, the controller
+is still initailizing. After ~30 seconds, there should be no errors and the
+pitch should move between a 0.03% range, far low to be perceived or even
+measured.
 
 ### Latency
 
@@ -53,21 +50,17 @@ When started, `jackpifm` will print a bunch of information, including the minimu
 and maximum latencies, and the targetted (typical) latency. Here "latency" is the
 time passed between getting a sample in the JACK port, and emitting the FM wave.
 
-Latency will never exceed the minimum and maximum printed. Also, `jackpifm` will
-try to adjust the pitch changes so that the latency stays close to the middle
-latency. This is far from a guarantee.
+The controller will keep the latency as close to the target latency as possible,
+and it's currently good at it (I see no more than a few milliseconds of deviation
+in my B+).
 
-**Protip 1:** If you hear glitches or get error messages, try increasing `-b` to improve
+However this is not a guarantee, and in some cases the latency can
+get out of control and reach the maximum or minimum, in which case
+the controller will be resetted and you'll hear glitches.
+
+**Protip:** If you hear glitches or get error messages, try increasing `-b` to improve
 stability. On the other hand, if you want to force less latency changes, decrease it.
 See also "Resampling" below.
-
-**Protip 2:** If latency changing isn't a problem to you, disable latency targetting
-by setting `-l` to 0 or a small value. This will reduce pitch changes and may produce
-occasional errors (i.e. one every two minutes).
-
-**Protip 3:** Another way to reduce glitches and errors is to reflow more frequently;
-you can do this by decreasing the `-t` option. This will cause bigger pitch changes
-but I'll doubt they'll become audible.
 
 
 ## Resampling
@@ -76,7 +69,7 @@ If `-r` is enabled, `jackpifm` will resample all sound from JACK into 152kHz bef
 emitting it. This means a bit more load on the CPU and GPIO, and translates into
 **distorsion** in FM except when absolute silence is being emitted.
 
-On the other hand, it means lower latency and latency changes, and less pitch changes.
+It also means lower latency but higher pitch changes.
 
 It's required if you want to enable Stereo or RDS (see below).
 
