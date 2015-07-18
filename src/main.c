@@ -192,8 +192,8 @@ int process_callback(jack_nframes_t nframes, void *arg) {
 
     ipos = (ipos + iperiod) % ringsize;
 
-    // Start thread, if we've reached the delay
-    if (!thread_started && iwritten >= delay) {
+    // Start thread
+    if (!thread_started) {
       int ret = pthread_create(&thread, NULL, output_thread, NULL);
       assert(!ret);
       thread_started = true;
