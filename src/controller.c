@@ -71,11 +71,11 @@ void jackpifm_controller_clear(jackpifm_controller_t *ctr) {
   ctr->offset_integral = - (ctr->resample_mean - ctr->static_resample_factor) * ctr->catch_factor * ctr->catch_factor2;
 
   /* Also clear the array. we are beginning a new control cycle. */
-  memset(ctr->smooth_offsets, 0x00, ctr->smooth_size);
+  memset(ctr->smooth_offsets, 0x00, ctr->smooth_size * sizeof(double));
 }
 
 double jackpifm_controller_process(jackpifm_controller_t *ctr, size_t delay) {
-  double offset = (int) delay - (int) ctr->target_delay;
+  double offset = (double) delay - ctr->target_delay;
 
   /* Save offset. */
   ctr->smooth_offsets[(ctr->offset_differential_index++) % ctr->smooth_size] = offset;
