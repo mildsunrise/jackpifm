@@ -9,7 +9,7 @@
 struct jackpifm_controller_t {
   /* Parameters */
   double static_resample_factor;
-  size_t target_delay;
+  double target_delay;
   size_t smooth_size;
   int catch_factor;
   int catch_factor2;
@@ -32,7 +32,7 @@ inline static double hann(double x) {
 
 jackpifm_controller_t *jackpifm_controller_new(
   double static_resample_factor,
-  size_t target_delay,
+  double target_delay,
   size_t smooth_size,
   int catch_factor,
   int catch_factor2,
