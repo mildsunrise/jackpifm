@@ -36,8 +36,7 @@ Have fun! It's still recommended to read the rest of this README.
 
 With the new version, we use a ringbuffer and a PI controller to acommodate
 desynchronization between JACK and the GPIO. We do this by changing the rate at which
-GPIO accepts frames. **This translates in constant, tiny pitch changes in the
-emission.**
+GPIO accepts frames.
 
 After firing `jackpifm` you'll see some errors; this is normal, the controller
 is still initailizing. After ~30 seconds, there should be no errors and the
